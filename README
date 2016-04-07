@@ -1,0 +1,3 @@
+A python spider aimed to Chinese website lianjia.com.
+
+Fetch the information needed and store into SQLite.
