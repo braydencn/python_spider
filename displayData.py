@@ -7,7 +7,7 @@ c = sqlite3.connect('xuequfang.db')
 sql = """ 
 select h.hid, p.riqi, p.price, x.name, s.name 
 from school s, xiaoqu x, house h, price p
-where s.sid = x.sid and x.xid = h.xid and h.hid = p.hid
+where s.sid = x.sid and x.xid = h.xid and h.hid = p.hid and p.price < 500
 order by p.hid, p.riqi
 """
 

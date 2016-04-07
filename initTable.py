@@ -9,11 +9,13 @@ create table xiaoqu(xid varchar primary key, name varchar,sid varchar,
     foreign key(sid) references school(sid) on delete cascade on update 
     cascade);
 
-create table house(hid varchar primary key, sid varchar, xid varchar, miaoji 
-    int, niandai int, huxing varchar, chaoxiang varchar, louceng varchar);
+create table house(hid varchar primary key, xid varchar, miaoji int, niandai 
+    int, huxing varchar, chaoxiang varchar, louceng varchar, foreign key(xid) 
+    references xiaoqu(xid) on delete cascade on update cascade);
 
 create table price(riqi date, hid varchar, price int, danjia int, shoufu int, 
-    yuegong int, primary key (riqi, hid)) 
+    yuegong int, primary key (riqi, hid), foreign key(hid) references 
+    house(hid) on delete cascade on update cascade) 
 """
 
 c = sqlite3.connect('xuequfang.db')
