@@ -9,6 +9,8 @@ import time
 
 DB_NAME = 'xuequfang.db'
 TIMEOUT = 60
+PRE_XQF = "http://bj.lianjia.com/xuequfang/"
+PRE_ESF = "http://bj.lianjia.com/ershoufang/"
 
 def getURL(url):
     page = ''
@@ -34,6 +36,7 @@ def querySQL(sql):
         conn.close()
 
 def execSQL(sql):
+    logger.info(sql)
     conn = sqlite3.connect(DB_NAME)
     retry = 2
     try:
@@ -48,28 +51,28 @@ def execSQL(sql):
         conn.commit()
         conn.close()
 
-def storePrices():
-    sql = "replace into price values " 
-    fmt = "(%s, '%s', '%s', '%s', '%s', '%s')"
+def storePrices(prices):
+    sql = "insert or ignore into price values " 
+    fmt = "(%s, '%s', '%s')"
     start = True
-    for h in local.prices:
+    for h in prices:
         if not start:
             sql += ', '
         else:
             start = False
-        sql += fmt % ('CURRENT_DATE', h[0], h[1], h[2], h[3], h[4])
+        sql += fmt % ('CURRENT_DATE', h[0], h[1])
     execSQL(sql) 
 
-def storeHouses():
+def storeHouses(houses):
     sql = "insert or ignore into house values " 
-    fmt = "('%s', '%s', '%s', '%s', '%s', '%s', '%s')"  
+    fmt = "('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')"  
     start = True
-    for h in local.houses:
+    for h in houses:
         if not start:
             sql += ', '
         else:
             start = False
-        sql += fmt % (h[0], h[1], h[2], '0', h[3], h[4], h[5])
+        sql += fmt % (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7])
     execSQL(sql) 
 
 
@@ -77,42 +80,53 @@ def storeOneXiaoqu(xid, xname, sid):
     sql = "insert or ignore into xiaoqu values('%s', '%s', '%s')" 
     execSQL(sql % (xid, xname, sid))
 
-def oneHouse(xid, hid):
-    prefix = "http://bj.lianjia.com/ershoufang/"
-    pat = r"售价：</dt><dd><span class=\"em-text\"><strong class=\"ft-num\">(\d+)</strong><span class=\"sub-text\">[^<]*</span><i>/ (\d+)㎡</i></span></dd></dl><dl><dt>单价：</dt><dd class=\"short\">(\d+) 元/平米</dd></dl><dl><dt>首付：</dt><dd class=\"short\">([^<]+)</dd></dl><dl><dt>月供：</dt><dd class=\"short\">([^<]+)</dd></dl><dl><dt>户型：</dt><dd>([^<]+)</dd></dl><dl><dt>朝向：</dt><dd>([^<]+)</dd></dl><dl><dt>楼层：</dt><dd>([^<]+)</dd></dl><dl class=\"clear\"><dt>小区：</dt><dd><a class=\"zone-name laisuzhou\" data-bl=\"area\" data-el=\"community\" href=\"http://bj.lianjia.com/xiaoqu/\d+/\">[^<]+</a>"
-    for m in re.finditer(pat, getURL(prefix + hid + ".html")):
-        price = m.group(1)
-        mianji = m.group(2)
-        danjia = m.group(3)
-        shoufu = m.group(4)
-        yuegong = m.group(5)
-        huxing = m.group(6)
-        chaoxiang = m.group(7)
-        louceng = m.group(8)
-        local.houses.append((hid, xid, mianji, huxing, chaoxiang, louceng))
-        local.prices.append((hid, price, danjia, shoufu, yuegong))
-
 def oneXiaoquPage(xid, xname, pg):
-    houseSet = set()
-    prefix = "http://bj.lianjia.com/ershoufang/"
-    pattern = r"(BJ\w+\d+)\.html.*?<div class=\"price\"><span class=\"num\">(\d+)</span>万</div>"
-    for m in re.finditer(pattern, getURL(prefix + pg)):
-        if int(m.group(2)) < 600:
-            houseSet.add(m.group(1))
-    local.houses = []
-    local.prices = []
-    for h in houseSet:
-        oneHouse(xid, h)
-    storeHouses()
-    storePrices()
+    houses = []
+    prices = []
+    pattern = r"(BJ\w+\d+)\.html.*?data-el=\"xiaoqu\"><span class=\"\">[^<]+</a></span>\&nbsp;\&nbsp;<span class=\"\"><span>([^<]+)\&nbsp;\&nbsp;</span></span><span class=\"\">([\d.]+)平米\&nbsp;\&nbsp;</span><span>([^<]+)</span></div>(.*?)<div class=\"chanquan\"><div class=\"left agency\"><div class=\"view-label left\">(.*?)<div class=\"col-3\"><div class=\"price\"><span class=\"num\">(\d+)</span>万"
+    for m in re.finditer(pattern, getURL(PRE_ESF + pg)):
+        hid = m.group(1)
+        huxing = m.group(2)
+        mianji = m.group(3)
+        chaoxiang = m.group(4)
+        others = m.group(5)
+        labels = m.group(6)
+        price = m.group(7)
+        if int(price) > 600:
+            continue
+        m1 = re.search(r"data-el=\"region\">[^<]+</a><span>/</span>([^<]+)<", others)
+        louceng = ''
+        if m1 is not None:
+            louceng = m1.group(1)
+        m2 = re.search(r">(\d+)年建", others)
+        niandai = ''
+        if m2 is not None:
+            niandai = m2.group(1)
+        if niandai != '' and int(niandai) < 1980:
+            continue
+        m3 = re.search(r"<span class=\"five-ex\"><span>([^<]+)<", labels)
+        label = ''
+        if m3 is not None:
+            label = m3.group(1)
+        m4 = re.search(r"<span class=\"taxfree-ex\"><span>([^<]+)<", labels)
+        if m4 is not None:
+            label = m4.group(1)
+        if label == '':
+            continue
+        houses.append((hid, xid, mianji, niandai, huxing, chaoxiang, 
+            louceng, label))
+        prices.append((hid, price))
+    if houses:
+        storeHouses(houses)
+    if prices:
+        storePrices(prices)
     
 def oneXiaoqu(sid, xid, xname):
     logger.info('    processing xiaoqu: %s', xname)
     storeOneXiaoqu(xid, xname, sid)
     threads = [] 
-    prefix = "http://bj.lianjia.com/ershoufang/"
     pattern = "pg\d+%s" % (xid)
-    for pg in re.findall(pattern, getURL(prefix + xid)):
+    for pg in re.findall(pattern, getURL(PRE_ESF + xid)):
         t = threading.Thread(target = oneXiaoquPage, 
             args = (xid, xname, pg))
         t.start()
@@ -124,10 +138,9 @@ def oneXiaoqu(sid, xid, xname):
     logger.info('    done with xiaoqu: %s', xname)
 
 def oneSchool(sid):
-    prefix = "http://bj.lianjia.com/xuequfang/" 
     threads = [] 
-    pattern = r"(sch" + sid + "c\d+)[^<]+<span class=\"sp01\">([^<]+)"
-    for m in re.finditer(pattern, getURL(prefix + sid + ".html")):
+    pattern = r"(sch%sc\d+)[^<]+<span class=\"sp01\">([^<]+)" % (sid)
+    for m in re.finditer(pattern, getURL("%s%s.html" % (PRE_XQF, sid))):
         xid = m.group(1)
         xname = m.group(2)
         t = threading.Thread(target = oneXiaoqu, args = (sid, xid, xname))
@@ -136,24 +149,27 @@ def oneSchool(sid):
     for t in threads:
         t.join()
 
+def setupLogging():
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    logger.addHandler(ch)
+
+def allSchools():
+    rows = [] 
+    for row in querySQL("select sid, name from school"):
+        rows.append([row[0], row[1]])
+    threads = []
+    for row in rows:
+        logger.info('processing school: %s', row[1])
+        t = threading.Thread(target = oneSchool, args = [row[0]])
+        t.start()
+        threads.append(t)
+    start = time.time()
+    for t in threads:
+        t.join() 
+    logger.info("Finished. Time spent: %f " % (time.time() - start))
+
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-logger.addHandler(ch)
-
-local = threading.local()
-
-rows = [] 
-for row in querySQL("select sid, name from school"):
-    rows.append([row[0], row[1]])
-threads = []
-for row in rows:
-    logger.info('processing school: %s', row[1])
-    t = threading.Thread(target = oneSchool, args = [row[0]])
-    t.start()
-    threads.append(t)
-start = time.time()
-for t in threads:
-    t.join()
-logger.info("Finished. Time spent: %f " % (time.time() - start))
+setupLogging()
+allSchools()
