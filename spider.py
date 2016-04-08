@@ -77,14 +77,17 @@ def storeHouses(houses):
 
 
 def storeOneXiaoqu(xid, xname, sid):
-    sql = "insert or ignore into xiaoqu values('%s', '%s', '%s')" 
+    #sql = "insert or ignore into xiaoqu values('%s', '%s', '%s')" 
+    sql = "replace into xiaoqu values('%s', '%s', '%s')" 
     execSQL(sql % (xid, xname, sid))
 
 def oneXiaoquPage(xid, xname, pg):
     houses = []
     prices = []
     pattern = r"(BJ\w+\d+)\.html.*?data-el=\"xiaoqu\"><span class=\"\">[^<]+</a></span>\&nbsp;\&nbsp;<span class=\"\"><span>([^<]+)\&nbsp;\&nbsp;</span></span><span class=\"\">([\d.]+)平米\&nbsp;\&nbsp;</span><span>([^<]+)</span></div>(.*?)<div class=\"chanquan\"><div class=\"left agency\"><div class=\"view-label left\">(.*?)<div class=\"col-3\"><div class=\"price\"><span class=\"num\">(\d+)</span>万"
+    handled = False
     for m in re.finditer(pattern, getURL(PRE_ESF + pg)):
+        handled = True
         hid = m.group(1)
         huxing = m.group(2)
         mianji = m.group(3)
@@ -92,7 +95,7 @@ def oneXiaoquPage(xid, xname, pg):
         others = m.group(5)
         labels = m.group(6)
         price = m.group(7)
-        if int(price) > 600:
+        if int(price) > 500:
             continue
         m1 = re.search(r"data-el=\"region\">[^<]+</a><span>/</span>([^<]+)<", others)
         louceng = ''
@@ -116,6 +119,8 @@ def oneXiaoquPage(xid, xname, pg):
         houses.append((hid, xid, mianji, niandai, huxing, chaoxiang, 
             louceng, label))
         prices.append((hid, price))
+    if not handled:
+        logger.info("%s not handled!" % (pg))
     if houses:
         storeHouses(houses)
     if prices:
@@ -139,10 +144,11 @@ def oneXiaoqu(sid, xid, xname):
 
 def oneSchool(sid):
     threads = [] 
-    pattern = r"(sch%sc\d+)[^<]+<span class=\"sp01\">([^<]+)" % (sid)
+    #pattern = r"(sch%sc\d+)[^<]+<span class=\"sp01\">([^<]+)" % (sid)
+    pattern = r"<span class=\"names\">[^>]+(sch%sc\d+)[^>]+>([^<]+)<" % (sid)
     for m in re.finditer(pattern, getURL("%s%s.html" % (PRE_XQF, sid))):
         xid = m.group(1)
-        xname = m.group(2)
+        xname = m.group(2).strip(" \t\n")
         t = threading.Thread(target = oneXiaoqu, args = (sid, xid, xname))
         t.start()
         threads.append(t)
@@ -150,6 +156,7 @@ def oneSchool(sid):
         t.join()
 
 def setupLogging():
+    #logger.setLevel(logging.WARNING)
     logger.setLevel(logging.INFO)
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
