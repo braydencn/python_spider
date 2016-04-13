@@ -3,7 +3,7 @@
 import sqlite3
 
 sql = """
-create table school(sid varchar primary key, name varchar);
+create table school(sid varchar primary key, name varchar, zone varchar);
 
 create table xiaoqu(xid varchar primary key, name varchar,sid varchar, 
     foreign key(sid) references school(sid) on delete cascade on update 
